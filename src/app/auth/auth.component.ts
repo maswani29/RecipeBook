@@ -1,21 +1,36 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { NgForm } from '@angular/forms';
-import { Router } from '@angular/router';
-import { Observable } from 'rxjs';
+import { Store } from '@ngrx/store';
+import { Subscription } from 'rxjs';
 
-import { AuthResponseData, AuthService } from './auth.service';
+import * as fromApp from '../store/app.reducer';
+import * as AuthActions from './store/auth.actions';
 
 @Component({
   selector: 'app-auth',
   templateUrl: './auth.component.html',
   styles: [''],
 })
-export class AuthComponent {
+export class AuthComponent implements OnInit, OnDestroy {
   isLoginMode: boolean = true;
   isLoading: boolean = false;
   error: string = null;
 
-  constructor(private authService: AuthService, private router: Router) {}
+  private storeSub: Subscription;
+
+  constructor(private store: Store<fromApp.AppState>) {}
+  ngOnDestroy(): void {
+    if (this.storeSub) {
+      this.storeSub.unsubscribe();
+    }
+  }
+
+  ngOnInit(): void {
+    this.storeSub = this.store.select('auth').subscribe((authState) => {
+      this.isLoading = authState.loading;
+      this.error = authState.authError;
+    });
+  }
 
   onSwitchMode() {
     this.isLoginMode = !this.isLoginMode;
@@ -28,29 +43,20 @@ export class AuthComponent {
     const email = form.value.email;
     const password = form.value.password;
 
-    let authObs: Observable<AuthResponseData>;
-
-    this.isLoading = true;
     if (this.isLoginMode) {
-      authObs =  this.authService.login(email, password);
-    } else {
-      authObs = this.authService.signup(email, password);
-    }
-    authObs.subscribe(
-        (resData) => {
-          // console.log(resData);
-          this.isLoading = false;
-          this.router.navigate(['/recipes']);
-        },
-        (errorMessage) => {
-          this.error = errorMessage;
-          this.isLoading = false;
-        }
+      this.store.dispatch(
+        new AuthActions.LoginStart({ email: email, password: password })
       );
+    } else {
+      this.store.dispatch(
+        new AuthActions.SignupStart({ email: email, password: password })
+      );
+    }
+
     form.reset();
   }
 
   onHandleError() {
-    this.error = null;
+    this.store.dispatch(new AuthActions.ClearError());
   }
 }
